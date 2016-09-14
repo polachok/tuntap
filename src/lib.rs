@@ -110,7 +110,7 @@ impl AsMut<InternalTun> for Queue {
     }
 }
 
-trait MultiQueue {
+pub trait MultiQueue {
     fn open_queue(&self) -> io::Result<Queue>;
 }
 
