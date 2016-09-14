@@ -1,0 +1,8 @@
+[package]
+name = "tuntap"
+version = "0.1.0"
+authors = ["Alexander Polyakov <apolyakov@beget.ru>"]
+
+[dependencies]
+bitflags = "0.7"
+libc = "0.2"
