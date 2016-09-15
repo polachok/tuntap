@@ -10,11 +10,24 @@ use std::os::unix::io::{RawFd,AsRawFd};
 use libc::{c_ulong,c_short};
 
 const IFF_UP: c_short = 0x0001;
-/* ifr_flags */
-const IFF_TUN: c_short = 0x0001;
-const IFF_TAP: c_short = 0x0002;
-const IFF_NO_PI: c_short = 0x1000;
-const IFF_MULTI_QUEUE: c_short = 0x0100;
+
+bitflags! {
+    flags TunFlags: c_short {
+        const IFF_TUN = 0x0001,
+        const IFF_TAP = 0x0002,
+        const IFF_NO_PI = 0x1000,
+        const IFF_MULTI_QUEUE = 0x0100,
+
+        const TUN_FASYNC = 0x0010,
+        const TUN_NOCHECKSUM = 0x0020,
+        const TUN_NO_PI = 0x0040,
+        /* This flag has no real effect */
+        const TUN_ONE_QUEUE = 0x0080,
+        const TUN_PERSIST = 0x0100,
+        const TUN_VNET_HDR = 0x0200,
+        const TUN_TAP_MQ = 0x0400,
+    }
+}
 
 /* ioctls (x86_64) */
 pub const TUNSETNOCSUM: c_ulong = 0x400454c8;
@@ -50,7 +63,7 @@ struct ifreq_flags {
 struct InternalTun {
     name: String,
     file: File,
-    flags: c_short,
+    flags: TunFlags,
 }
 
 impl AsRawFd for InternalTun {
@@ -116,13 +129,13 @@ pub trait MultiQueue {
 
 impl MultiQueue for MultiQueueTun {
     fn open_queue(&self) -> io::Result<Queue> {
-        TunBuilder::open_int(Some(&self.0.name), self.0.flags, false).map(|tun| Queue(tun))
+        TunBuilder::open_int(Some(&self.0.name), self.0.flags.bits(), false).map(|tun| Queue(tun))
     }
 }
 
 impl MultiQueue for MultiQueueTap {
     fn open_queue(&self) -> io::Result<Queue> {
-        TunBuilder::open_int(Some(&self.0.name), self.0.flags, false).map(|tun| Queue(tun))
+        TunBuilder::open_int(Some(&self.0.name), self.0.flags.bits(), false).map(|tun| Queue(tun))
     }
 }
 
@@ -160,32 +173,32 @@ impl<'a, T> TunBuilder<'a,T> where T: AsRef<str> + AsRef<[u8]>  {
     }
 
     pub fn open_tap(&mut self) -> io::Result<Tap> {
-        let mut flags: c_short = IFF_TAP;
+        let mut flags: c_short = IFF_TAP.bits();
 
         if !self.packet_info {
-            flags |= IFF_NO_PI;
+            flags |= IFF_NO_PI.bits();
         }
 
         Self::open_int(self.name, flags, self.persist).map(|tun| Tap(tun))
     }
 
     pub fn open_mq_tap(&mut self) -> io::Result<MultiQueueTap> {
-        let mut flags: c_short = IFF_TAP;
+        let mut flags: c_short = IFF_TAP.bits();
 
-        flags |= IFF_MULTI_QUEUE;
+        flags |= IFF_MULTI_QUEUE.bits();
 
         if !self.packet_info {
-            flags |= IFF_NO_PI;
+            flags |= IFF_NO_PI.bits();
         }
 
         Self::open_int(self.name, flags, self.persist).map(|tun| MultiQueueTap(tun))
     }
 
     pub fn open_tun(&mut self) -> io::Result<Tun> {
-        let mut flags: c_short = IFF_TUN;
+        let mut flags: c_short = IFF_TUN.bits();
 
         if !self.packet_info {
-            flags |= IFF_NO_PI;
+            flags |= IFF_NO_PI.bits();
         }
 
         Self::open_int(self.name, flags, self.persist).map(|tun| Tun(tun))
@@ -226,7 +239,7 @@ impl<'a, T> TunBuilder<'a,T> where T: AsRef<str> + AsRef<[u8]>  {
         }
         let c_name = unsafe { CStr::from_ptr(ifreq.ifr_name.as_ptr() as *const i8) };
         let name = c_name.to_owned().into_string().unwrap();
-        Ok(InternalTun { file: file, name: name, flags: flags })
+        Ok(InternalTun { file: file, name: name, flags: TunFlags::from_bits_truncate(ifreq.ifr_ifru_flags) })
     }
 }
 
